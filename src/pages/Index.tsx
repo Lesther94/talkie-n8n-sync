@@ -29,30 +29,15 @@ const Index = () => {
     }
 
     try {
-      // Convert audio blob to base64
-      const reader = new FileReader();
-      const base64Audio = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(audioBlob);
-      });
-
       console.log('Sending audio to n8n, size:', audioBlob.size);
 
-      // Send audio to n8n webhook
+      // Send audio as binary file using FormData
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+
       const response = await fetch(webhookUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          audio: base64Audio,
-          audioType: audioBlob.type,
-          timestamp: new Date().toISOString(),
-        }),
+        body: formData,
       });
 
       if (!response.ok) {
