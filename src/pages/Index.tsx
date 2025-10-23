@@ -61,10 +61,27 @@ const Index = () => {
 
       const data: N8nResponse = await response.json();
       
+      // Handle binary audio data (base64) from n8n TTS node
+      let audioUrl: string | undefined;
+      if (data.audio || data.audioData) {
+        const audioBase64 = data.audio || data.audioData;
+        // Convert base64 to blob and create object URL
+        const binaryString = atob(audioBase64!);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
+        audioUrl = URL.createObjectURL(audioBlob);
+      } else if (data.audioUrl || data.audio_url) {
+        // Fallback to URL if provided
+        audioUrl = data.audioUrl || data.audio_url;
+      }
+      
       return {
         transcription: data.transcription || data.text || 'Transcription reçue',
         response: data.response || data.message || 'Réponse reçue',
-        audioUrl: data.audioUrl || data.audio_url,
+        audioUrl,
       };
     } catch (error) {
       console.error('Error sending to n8n:', error);

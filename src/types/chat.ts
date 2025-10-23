@@ -13,5 +13,7 @@ export interface N8nResponse {
   message?: string;
   audioUrl?: string;
   audio_url?: string;
+  audio?: string; // Base64 encoded audio data
+  audioData?: string; // Alternative field for audio data
   [key: string]: any;
 }
