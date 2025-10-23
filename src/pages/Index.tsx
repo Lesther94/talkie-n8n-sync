@@ -23,53 +23,49 @@ const Index = () => {
     localStorage.setItem('n8n_webhook_url', webhookUrl);
   }, [webhookUrl]);
 
-  const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
-    const reader = new FileReader();
-    return new Promise((resolve, reject) => {
-      reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        
-        try {
-          // TODO: Replace with actual Lovable Cloud function when enabled
-          // For now, simulating transcription
-          console.log('Audio blob size:', audioBlob.size);
-          resolve('Message vocal transcrit (simulation)');
-          
-          toast({
-            title: "Info",
-            description: "Activez Lovable Cloud pour la transcription réelle via Whisper",
-          });
-        } catch (error) {
-          reject(error);
-        }
-      };
-      reader.readAsDataURL(audioBlob);
-    });
-  };
-
-  const sendToN8n = async (text: string): Promise<string> => {
+  const sendAudioToN8n = async (audioBlob: Blob): Promise<{ transcription: string; response: string; audioUrl?: string }> => {
     if (!webhookUrl) {
       throw new Error('URL du webhook n8n non configurée');
     }
 
     try {
+      // Convert audio blob to base64
+      const reader = new FileReader();
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
+
+      console.log('Sending audio to n8n, size:', audioBlob.size);
+
+      // Send audio to n8n webhook
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: text,
+          audio: base64Audio,
+          audioType: audioBlob.type,
           timestamp: new Date().toISOString(),
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors de l\'envoi à n8n');
+        throw new Error(`Erreur n8n: ${response.status}`);
       }
 
       const data: N8nResponse = await response.json();
-      return data.response || data.message || data.text || 'Réponse reçue';
+      
+      return {
+        transcription: data.transcription || data.text || 'Transcription reçue',
+        response: data.response || data.message || 'Réponse reçue',
+        audioUrl: data.audioUrl || data.audio_url,
+      };
     } catch (error) {
       console.error('Error sending to n8n:', error);
       throw error;
@@ -80,33 +76,31 @@ const Index = () => {
     setIsProcessing(true);
 
     try {
-      // Step 1: Transcribe audio
-      const transcribedText = await transcribeAudio(audioBlob);
+      // Send audio directly to n8n (which will handle Whisper + processing + TTS)
+      const { transcription, response, audioUrl } = await sendAudioToN8n(audioBlob);
       
-      // Add user message
+      // Add user message (transcription from n8n)
       const userMessage: Message = {
         id: Date.now().toString(),
-        content: transcribedText,
+        content: transcription,
         isUser: true,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, userMessage]);
 
-      // Step 2: Send to n8n
-      const response = await sendToN8n(transcribedText);
-      
-      // Add assistant message
+      // Add assistant message (response from n8n)
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response,
         isUser: false,
         timestamp: new Date(),
+        audioUrl, // Store audio URL if n8n returns TTS audio
       };
       setMessages(prev => [...prev, assistantMessage]);
 
       toast({
-        title: "Message envoyé",
-        description: "Réponse reçue de n8n",
+        title: "Message traité",
+        description: "Transcription et réponse reçues de n8n",
       });
     } catch (error) {
       console.error('Error processing message:', error);
@@ -120,12 +114,24 @@ const Index = () => {
     }
   };
 
-  const handlePlayAudio = async (text: string) => {
-    // TODO: Implement text-to-speech with Lovable Cloud
-    toast({
-      title: "Info",
-      description: "Activez Lovable Cloud pour la synthèse vocale",
-    });
+  const handlePlayAudio = async (message: Message) => {
+    if (message.audioUrl) {
+      // Play audio from n8n TTS
+      const audio = new Audio(message.audioUrl);
+      audio.play().catch(error => {
+        console.error('Error playing audio:', error);
+        toast({
+          title: "Erreur audio",
+          description: "Impossible de lire l'audio",
+          variant: "destructive",
+        });
+      });
+    } else {
+      toast({
+        title: "Audio non disponible",
+        description: "Votre workflow n8n doit renvoyer un URL audio",
+      });
+    }
   };
 
   return (
@@ -164,7 +170,7 @@ const Index = () => {
             message={message.content}
             isUser={message.isUser}
             timestamp={message.timestamp}
-            onPlayAudio={!message.isUser ? () => handlePlayAudio(message.content) : undefined}
+            onPlayAudio={!message.isUser ? () => handlePlayAudio(message) : undefined}
           />
         ))}
         <div ref={messagesEndRef} />
