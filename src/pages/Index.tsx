@@ -23,6 +23,17 @@ const Index = () => {
     localStorage.setItem('n8n_webhook_url', webhookUrl);
   }, [webhookUrl]);
 
+  // Auto-play audio when a new assistant message with audio arrives
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && !lastMessage.isUser && lastMessage.audioUrl) {
+      const audio = new Audio(lastMessage.audioUrl);
+      audio.play().catch(error => {
+        console.error('Error auto-playing audio:', error);
+      });
+    }
+  }, [messages]);
+
   const sendAudioToN8n = async (audioBlob: Blob): Promise<{ transcription: string; response: string; audioUrl?: string }> => {
     if (!webhookUrl) {
       throw new Error('URL du webhook n8n non configurée');
@@ -163,7 +174,7 @@ const Index = () => {
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
             <MessageSquare className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-lg font-medium mb-2">Commencez une conversation</p>
-            <p className="text-sm">Appuyez sur le bouton micro pour parler</p>
+            <p className="text-sm">Maintenez le bouton micro enfoncé pour parler</p>
           </div>
         )}
         {messages.map((message) => (

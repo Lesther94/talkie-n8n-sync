@@ -49,7 +49,11 @@ export const VoiceRecorder = ({ onRecordingComplete, isProcessing }: VoiceRecord
   return (
     <div className="flex justify-center items-center">
       <Button
-        onClick={isRecording ? stopRecording : startRecording}
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        onMouseLeave={stopRecording}
+        onTouchStart={startRecording}
+        onTouchEnd={stopRecording}
         disabled={isProcessing}
         className={cn(
           "w-16 h-16 rounded-full transition-smooth shadow-glow",
